@@ -44,7 +44,15 @@ function githubSection(s) {
     "github",
     "GitHub",
     `${(hosts.length ? hosts : ["github.com"]).map((h) => accountRow(h, s)).join("")}
-     <p class="hint">Hosts come from your repos' Issues and Pulls links. To add GitHub Enterprise, add a repo whose links are on its host (like <code>https://github.ibm.com/org/repo/issues</code>) under Repositories.</p>
+     <details class="ghe-add" style="margin: 12px 0 16px;">
+       <summary class="link" style="cursor: pointer; font-size: 13px;"><b>+ Add GitHub Enterprise host</b></summary>
+       <form class="field-row" data-form="connect" style="margin-top: 8px;">
+         <input class="input" type="text" name="host" placeholder="github.ibm.com" autocomplete="off" aria-label="Enterprise host domain" required style="max-width: 170px;">
+         <input class="input" type="password" name="token" placeholder="Token" autocomplete="off" aria-label="Enterprise token" required>
+         <button class="btn btn--primary" type="submit">Connect</button>
+       </form>
+       <p class="hint" style="margin-top: 6px;">Enter your enterprise host domain (e.g. <code>github.ibm.com</code>) and a classic personal access token with <code>repo</code>, <code>notifications</code>, and <code>read:org</code> scopes.</p>
+     </details>
      <div class="fields">
        <label class="field"><span>Check GitHub every</span>${select("pollMinutes", s.pollMinutes, [1, 2, 3, 5, 10, 15].map((m) => [m, `${m} min`]))}</label>
        <label class="field"><span>Reviews are overdue after</span>${select("staleReviewDays", s.staleReviewDays, [1, 2, 3, 5].map((d) => [d, plural(d, "day")]))}</label>
@@ -190,12 +198,16 @@ export async function checkBob() {
 }
 
 export async function connect(token, form) {
-  token = token.trim();
-  const host = form.dataset.host || "github.com";
-  if (!token) return;
+  const hostInput = form.querySelector("[name=host]");
+  const tokenInput = form.querySelector("[name=token]");
+  token = (tokenInput ? tokenInput.value : token || "").trim();
+  const rawHost = hostInput?.value || form.dataset.host || "github.com";
+  const host = rawHost.trim().replace(/^https?:\/\//i, "").replace(/\/.*$/, "").toLowerCase();
+  if (!host || !token) return;
   // api.github.com is in the manifest; an Enterprise host is asked for now, while the click still counts.
   const allowed = host === "github.com" ? true : chrome.permissions.request({ origins: [`https://${host}/*`] });
-  form.querySelector("[type=submit]").disabled = true;
+  const submitBtn = form.querySelector("[type=submit]");
+  if (submitBtn) submitBtn.disabled = true;
   try {
     if (!(await allowed)) throw new Error(`Chrome needs your permission to reach ${host}.`);
     const viewer = await fetchViewer(host, token);
@@ -212,7 +224,7 @@ export async function connect(token, form) {
     requestSync();
   } catch (err) {
     toast(`Couldn't connect: ${err.message}`, "error");
-    form.querySelector("[type=submit]").disabled = false;
+    if (submitBtn) submitBtn.disabled = false;
   }
 }
 
